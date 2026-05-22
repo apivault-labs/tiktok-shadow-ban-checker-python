@@ -46,6 +46,11 @@ def main() -> None:
         for hint in result["banReasonHints"]:
             print(f"    - {hint}")
 
+    if result.get("recommendations"):
+        print(f"\n  💡 Recommendations:")
+        for rec in result["recommendations"]:
+            print(f"    {rec}")
+
 
 if __name__ == "__main__":
     main()
