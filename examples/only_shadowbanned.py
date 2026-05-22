@@ -1,8 +1,9 @@
 """
-Filter a list of TikTok videos down to only the shadow-banned ones.
+Filter a list of TikTok video URLs down to only the shadow-banned ones.
 
-Use case: pull a creator's entire feed, then surface only the videos that
-need investigation or re-uploading.
+Use case: feed a long list of recent uploads (yours or a competitor's),
+surface only the videos that need investigation or re-uploading, and
+print the actionable recommendations alongside.
 
     export APIFY_API_TOKEN=apify_api_xxxxxx
     python examples/only_shadowbanned.py
@@ -11,26 +12,37 @@ need investigation or re-uploading.
 from tiktok_shadowban_checker import TikTokShadowBanClient
 
 
-USERNAME = "tiktok"
-LIMIT = 30
+VIDEO_URLS = [
+    "https://www.tiktok.com/@tiktok/video/7480279424202575159",
+    "https://www.tiktok.com/@khaby.lame/video/7299530268907818273",
+    "https://www.tiktok.com/@charlidamelio/video/7227253960028196138",
+    "https://www.tiktok.com/@addisonre/video/7299530268907818275",
+    "https://www.tiktok.com/@bellapoarch/video/7227253960028196138",
+]
 
 
 def main() -> None:
     client = TikTokShadowBanClient(timeout=900)
-    videos, summary = client.check_account(USERNAME, limit=LIMIT)
+    videos, summary = client.check_urls(VIDEO_URLS)
 
     banned = [v for v in videos if v.get("shadowbanned")]
 
     print(f"\nChecked {len(videos)} videos, {len(banned)} shadowbanned:\n")
     for v in banned:
-        print(f"  {v.get('createDate')}  health={v.get('videoHealthScore')}  "
-              f"{(v.get('description') or '')[:60]}")
+        author = "@" + ((v.get("author") or {}).get("uniqueId") or "?")
+        date = v.get("createDate") or "?"
+        health = v.get("videoHealthScore") or "?"
+        desc = (v.get("description") or "")[:60]
+        print(f"  {author:<22} {date}  health={health}  {desc}")
+
         for hint in (v.get("banReasonHints") or []):
-            print(f"      - {hint}")
-        print(f"      {v.get('url')}")
+            print(f"      hint: {hint}")
+        for rec in (v.get("recommendations") or [])[1:]:  # skip verdict line
+            print(f"      💡 {rec}")
+        print(f"      url: {v.get('url')}\n")
 
     if summary:
-        print(f"\nOverall: {summary['recommendation']}")
+        print(f"Overall: {summary['recommendation']}")
 
 
 if __name__ == "__main__":
