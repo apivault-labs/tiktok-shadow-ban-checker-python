@@ -4,9 +4,10 @@ TikTokShadowBanClient — synchronous wrapper around the Apify
 
 The actor handles all heavy work (residential proxy rotation, multiple HTML
 fetch strategies, embedded-JSON parsing, shadow-ban signal aggregation, health
-score and engagement-rate computation) on Apify infrastructure. This client
-forwards inputs, polls until the run finishes, then downloads the dataset and
-splits it into per-video records and the optional batch summary.
+score, engagement-rate computation and actionable recommendations) on Apify
+infrastructure. This client forwards inputs, polls until the run finishes, then
+downloads the dataset and splits it into per-video records and the optional
+batch summary.
 
 Usage:
 
@@ -19,14 +20,23 @@ Usage:
         "https://www.tiktok.com/@tiktok/video/7480279424202575159",
         "https://vm.tiktok.com/abc123/",
     ])
+    for r in results:
+        for rec in r.get("recommendations", []):
+            print(rec)
 
-    # Audit last 30 videos from an account
-    results, summary = client.check_account("tiktok", limit=30)
+    # Or paste a multi-line block of URLs
+    results, summary = client.check_text(
+        '''
+        https://www.tiktok.com/@a/video/1
+        https://www.tiktok.com/@b/video/2
+        '''
+    )
 """
 
 from __future__ import annotations
 
 import os
+import re
 import time
 from typing import Any, Iterable, Sequence
 
@@ -87,7 +97,7 @@ class TikTokShadowBanClient:
         self._session.headers.update({
             "Authorization": f"Bearer {self._token}",
             "Content-Type": "application/json",
-            "User-Agent": "tiktok-shadowban-checker-python/0.1.0",
+            "User-Agent": "tiktok-shadowban-checker-python/0.2.0",
         })
 
     # ------------------------------------------------------------------ public
@@ -97,12 +107,32 @@ class TikTokShadowBanClient:
         urls: Iterable[str],
         *,
         include_summary: bool = True,
+        include_recommendations: bool = True,
         max_retries: int = 5,
         proxy_country: str = "US",
         custom_proxy_urls: Sequence[str] | None = None,
         actor_timeout_secs: int = 600,
     ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         """Check a batch of TikTok video URLs for shadow-ban status.
+
+        Parameters
+        ----------
+        urls : iterable of str
+            TikTok video URLs (full or `vm.tiktok.com` short links).
+        include_summary : bool, optional
+            Append a batch-summary record at the end of the dataset. Default ``True``.
+        include_recommendations : bool, optional
+            Add a ``recommendations`` array to every video result with specific
+            advice based on the detected signals (e.g. *"Comments are disabled.
+            Re-enable them..."*). Default ``True``.
+        max_retries : int, optional
+            Per-URL retry attempts with a fresh proxy IP. Default 5.
+        proxy_country : str, optional
+            ISO 2-letter code for residential proxy. Default ``"US"``.
+        custom_proxy_urls : sequence of str, optional
+            Override Apify residential proxy with your own.
+        actor_timeout_secs : int, optional
+            Maximum runtime hint for the actor. Default 600.
 
         Returns
         -------
@@ -116,9 +146,9 @@ class TikTokShadowBanClient:
             raise ValueError("urls must contain at least one non-empty URL")
 
         payload = self._build_payload(
-            mode="urls",
             urls=cleaned,
             include_summary=include_summary,
+            include_recommendations=include_recommendations,
             max_retries=max_retries,
             proxy_country=proxy_country,
             custom_proxy_urls=custom_proxy_urls,
@@ -146,48 +176,24 @@ class TikTokShadowBanClient:
             )
         return rec
 
-    def check_account(
+    def check_text(
         self,
-        username: str,
-        *,
-        limit: int = 10,
-        include_summary: bool = True,
-        max_retries: int = 5,
-        proxy_country: str = "US",
-        custom_proxy_urls: Sequence[str] | None = None,
-        actor_timeout_secs: int = 900,
+        url_text: str,
+        **kwargs: Any,
     ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-        """Audit the last ``limit`` videos of a public TikTok account.
+        """Convenience wrapper that accepts a multi-line / multi-comma block
+        of TikTok URLs (the same way the Apify Console ``urlText`` textarea
+        does it). URLs are split on any whitespace or comma, deduplicated
+        client-side and forwarded to :meth:`check_urls`.
 
-        Parameters
-        ----------
-        username : str
-            TikTok username (with or without leading ``@``).
-        limit : int, optional
-            How many recent videos to check (1-50). Default 10.
-
-        Returns
-        -------
-        tuple[list[dict], dict | None]
-            ``(video_results, batch_summary)``.
+        Useful when copying URLs out of a spreadsheet column or a Slack
+        message.
         """
-        u = (username or "").lstrip("@").strip()
-        if not u:
-            raise ValueError("username is required for check_account()")
-        if not (1 <= int(limit) <= 50):
-            raise ValueError("limit must be between 1 and 50")
-
-        payload = self._build_payload(
-            mode="account",
-            username=u,
-            account_limit=int(limit),
-            include_summary=include_summary,
-            max_retries=max_retries,
-            proxy_country=proxy_country,
-            custom_proxy_urls=custom_proxy_urls,
-        )
-        records = self._run(payload, actor_timeout_secs=actor_timeout_secs)
-        return self._split_summary(records)
+        if not url_text or not url_text.strip():
+            raise ValueError("url_text must contain at least one URL")
+        chunks = re.split(r"[\s,]+", url_text.strip())
+        urls = [c for c in chunks if c]
+        return self.check_urls(urls, **kwargs)
 
     def estimate_cost(self, video_count: int) -> float:
         """Return the estimated USD cost for checking ``video_count`` videos.
@@ -201,26 +207,20 @@ class TikTokShadowBanClient:
     @staticmethod
     def _build_payload(
         *,
-        mode: str,
-        urls: Sequence[str] | None = None,
-        username: str | None = None,
-        account_limit: int = 10,
+        urls: Sequence[str],
         include_summary: bool = True,
+        include_recommendations: bool = True,
         max_retries: int = 5,
         proxy_country: str = "US",
         custom_proxy_urls: Sequence[str] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "mode": mode,
+            "urls": list(urls),
             "includeSummary": bool(include_summary),
+            "includeRecommendations": bool(include_recommendations),
             "maxRetries": max(1, min(10, int(max_retries))),
             "proxyCountry": (proxy_country or "").strip().upper(),
         }
-        if mode == "urls":
-            payload["urls"] = list(urls or [])
-        else:
-            payload["username"] = username
-            payload["accountLimit"] = int(account_limit)
         if custom_proxy_urls:
             payload["customProxyUrls"] = [str(p).strip() for p in custom_proxy_urls if p]
         return payload
