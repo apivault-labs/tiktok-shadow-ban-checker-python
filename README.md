@@ -1,6 +1,6 @@
 # TikTok Shadow Ban Checker — Python SDK
 
-> **Detect TikTok shadow bans on any public video or audit an entire account in one call: 30+ signals per video, composite health score, engagement rate, viral potential and human-readable ban reasons.**
+> **Detect TikTok shadow bans on any public video: 30+ signals per video, composite health score, engagement rate, viral potential, plain-English ban reasons and actionable recommendations — all in one call.**
 
 Python client for the [TikTok Shadow Ban Checker Apify Actor](https://apify.com/apivault_labs/tiktok-shadow-ban-checker) — the most-used shadow ban detection tool on Apify Store, going beyond the legacy `indexEnabled` flag with a multi-signal composite verdict.
 
@@ -13,7 +13,7 @@ Python client for the [TikTok Shadow Ban Checker Apify Actor](https://apify.com/
 
 ## What it does
 
-For any TikTok video URL — or the last N videos of a TikTok account — this actor returns a single rich JSON record per video combining **multiple shadow-ban signals**, **engagement metrics** and **a composite health score**, plus an optional **batch summary** when checking multiple videos.
+For any TikTok video URL this actor returns a single rich JSON record combining **multiple shadow-ban signals**, **engagement metrics**, **a composite health score** and **a list of actionable, plain-English recommendations** — plus an optional **batch summary** when checking multiple videos.
 
 Built because the legacy `indexEnabled` flag has been progressively scrubbed from public TikTok HTML in 2026. This SDK uses an aggregate verdict from **all** signals TikTok still exposes:
 
@@ -26,6 +26,8 @@ A direct, pay-per-use alternative to:
 - Generic creator-analytics platforms ($49-$199/mo)
 
 **Pricing:** $0.01 per video ($10 / 1000). No subscriptions, no quotas.
+
+> **Note:** Account-mode (audit a whole TikTok username in one call) was removed in v1.2 because TikTok stopped shipping the user video list in public HTML. Pass video URLs directly with `check_urls()` or `check_text()` — every other signal is unchanged.
 
 ---
 
@@ -45,10 +47,16 @@ print(f"Shadowbanned:    {result['shadowbanned']}")
 print(f"Health score:    {result['videoHealthScore']}/100 ({result['videoHealthStatus']})")
 print(f"Engagement rate: {result['engagementRate']}%")
 print(f"Viral score:     {result['viralPotentialScore']}/100")
-if result["banReasonHints"]:
+
+if result.get("banReasonHints"):
     print("Reasons:")
     for hint in result["banReasonHints"]:
         print(f"  - {hint}")
+
+if result.get("recommendations"):
+    print("\nRecommendations:")
+    for rec in result["recommendations"]:
+        print(f"  {rec}")
 ```
 
 Output:
@@ -57,15 +65,22 @@ Shadowbanned:    False
 Health score:    95/100 (healthy)
 Engagement rate: 4.23%
 Viral score:     72/100
+
+Recommendations:
+  ✅ Video looks healthy. No shadow-ban action needed.
+  🔥 Engagement rate 4.23% is excellent (industry avg 3-6%). Keep this format/topic in rotation — it converts.
 ```
 
-Or audit an entire account at once:
+Or paste a multi-line block of URLs (great for spreadsheet copy-paste):
 
 ```python
-videos, summary = client.check_account("creator_handle", limit=30)
+videos, summary = client.check_text("""
+    https://www.tiktok.com/@a/video/1
+    https://www.tiktok.com/@b/video/2
+    https://www.tiktok.com/@c/video/3
+""")
 
 print(f"Shadowbanned: {summary['shadowbannedCount']}/{summary['totalChecked']}")
-print(f"Avg health:   {summary['avgHealthScore']}/100")
 print(f"Verdict:      {summary['recommendation']}")
 ```
 
@@ -159,12 +174,12 @@ See the [`examples/`](examples) folder for full code:
 
 | File | What it does |
 |---|---|
-| [`quickstart.py`](examples/quickstart.py) | Check one video, print verdict + reasons |
+| [`quickstart.py`](examples/quickstart.py) | Check one video, print verdict + reasons + recommendations |
 | [`bulk_check.py`](examples/bulk_check.py) | Check many video URLs in one batch |
-| [`account_audit.py`](examples/account_audit.py) | Audit last 30 videos of an account |
-| [`monitor_creator.py`](examples/monitor_creator.py) | Track shadow-ban rate over time |
-| [`export_to_csv.py`](examples/export_to_csv.py) | Save results to CSV / Excel |
-| [`only_shadowbanned.py`](examples/only_shadowbanned.py) | Filter list to banned videos only |
+| [`paste_urls.py`](examples/paste_urls.py) | Paste a multi-line block of URLs (spreadsheet-friendly) |
+| [`monitor_creator.py`](examples/monitor_creator.py) | Track health of your own recent videos over time |
+| [`export_to_csv.py`](examples/export_to_csv.py) | Save results to CSV / Excel (including recommendations) |
+| [`only_shadowbanned.py`](examples/only_shadowbanned.py) | Filter list to banned videos only with action items |
 | [`agency_dashboard.py`](examples/agency_dashboard.py) | Generate per-client health reports |
 
 ---
@@ -187,6 +202,7 @@ Check a batch of video URLs.
 |---|---|---|---|
 | `urls` | `list[str]` | required | TikTok video URLs (full or `vm.tiktok.com` short links) |
 | `include_summary` | `bool` | `True` | Append a batch-summary record |
+| `include_recommendations` | `bool` | `True` | Add a `recommendations[]` array to each video result |
 | `max_retries` | `int` | 5 | Retry attempts per URL with new proxy IP |
 | `proxy_country` | `str` | `"US"` | ISO 2-letter code; pin to avoid region-redirects |
 | `custom_proxy_urls` | `list[str]` | `None` | Override Apify proxy with your own |
@@ -198,16 +214,16 @@ Returns: `tuple[list[dict], dict | None]` — `(video_results, batch_summary)`.
 
 Convenience wrapper for a single URL. Returns one `dict` or raises `ActorRunError`.
 
-### `client.check_account(username, limit=10, **kwargs)`
+### `client.check_text(url_text, **kwargs)`
 
-Audit the last `limit` videos of a public TikTok account.
+Accept a multi-line / multi-comma block of TikTok URLs (mimics the actor's `urlText` textarea). Splits on any whitespace or comma, deduplicates client-side, forwards to `check_urls()`. Useful for spreadsheet copy-paste.
 
-| Param | Type | Default | Description |
-|---|---|---|---|
-| `username` | `str` | required | TikTok username (with or without `@`) |
-| `limit` | `int` | 10 | Recent videos to check (1-50) |
-
-All other params identical to `check_urls()`.
+```python
+videos, summary = client.check_text("""
+    https://www.tiktok.com/@a/video/1
+    https://www.tiktok.com/@b/video/2
+""")
+```
 
 Returns: `tuple[list[dict], dict | None]`.
 
@@ -274,7 +290,12 @@ Returns the estimated USD cost (`video_count × 0.01`).
     "original": true
   },
 
-  "hashtags": ["fyp", "tiktok"]
+  "hashtags": ["fyp", "tiktok"],
+
+  "recommendations": [
+    "✅ Video looks healthy. No shadow-ban action needed.",
+    "🔥 Engagement rate 4.23% is excellent (industry avg 3-6%). Keep this format/topic in rotation — it converts."
+  ]
 }
 ```
 
@@ -305,9 +326,10 @@ Returns the estimated USD cost (`video_count × 0.01`).
 
 ### 🎥 Creator self-audit
 Catch shadow bans before they tank your reach:
-- Run `check_account("@yourself")` weekly as a cron job
+- Maintain a list of your recent video URLs (export from your TikTok analytics CSV) and run `check_urls()` on them weekly as a cron job
 - Alert when `shadowbannedPct > 20%`
 - Inspect `banReasonHints` to identify the policy violation
+- Use `recommendations[]` to know exactly what to fix in each video
 - Track `avgHealthScore` as a trailing health metric
 
 ### 🏢 Agency client reporting
@@ -403,7 +425,7 @@ A: It was, until TikTok started removing it from public HTML in 2026. The actor 
 A: TikTok exposes this field inconsistently. When `null`, the score gives partial credit and relies on other signals.
 
 **Q: Will it work on private accounts?**
-A: No. Account mode (`check_account`) requires a public profile. Direct video URLs from private accounts return an error.
+A: Direct video URLs from private accounts return an error — only public videos can be analysed.
 
 **Q: How accurate is the verdict?**
 A: When **hard signals fire** (`takeDown`, `secret`, `privateItem`, `forFriend`, `isReviewing`, `warnInfo`, `divertToPrivate`), accuracy is essentially 100% — these are TikTok's own moderation flags. The composite-soft path (3+ restrictions) is a heuristic and may produce false positives on creators who genuinely disabled features by choice — inspect `banReasonHints` to verify.
