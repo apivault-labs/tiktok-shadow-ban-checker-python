@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tiktok-shadowban-checker"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python SDK for the TikTok Shadow Ban Checker Apify actor — multi-signal shadow ban detection with health score, engagement rate and viral potential per video. Audit single videos or entire accounts. No TikTok API key required."
 readme = "README.md"
 license = { text = "MIT" }
