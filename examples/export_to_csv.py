@@ -55,6 +55,8 @@ COLUMNS = [
     "saves",
     "hashtags",
     "banReasonHints",
+    "topRecommendation",
+    "allRecommendations",
 ]
 
 
@@ -95,6 +97,8 @@ def flatten(rec: dict) -> dict:
         "saves":                s.get("saves"),
         "hashtags":             "; ".join(rec.get("hashtags") or []),
         "banReasonHints":       "; ".join(rec.get("banReasonHints") or []),
+        "topRecommendation":    (rec.get("recommendations") or [None])[0],
+        "allRecommendations":   " | ".join(rec.get("recommendations") or []),
     }
     return out
 
