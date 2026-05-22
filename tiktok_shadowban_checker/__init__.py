@@ -2,16 +2,16 @@
 TikTok Shadow Ban Checker — Python SDK
 
 Official Python client for the apivault_labs/tiktok-shadow-ban-checker Apify
-actor. Detect TikTok shadow bans on individual videos or audit an entire
-account's recent uploads with one API call.
+actor. Detect TikTok shadow bans on individual videos with one API call.
 
-Returns 30+ signals per video:
+Returns 30+ signals per video plus a list of plain-English recommendations:
 - shadow ban verdict (composite of takeDown, secret, privateItem, forFriend,
   isReviewing, divertToPrivate, indexEnabled, forYou, search, plus soft
   restrictions like duet / stitch / comment / download / share)
-- videoHealthScore (0-100)
+- videoHealthScore (0-100), videoHealthStatus
 - engagementRate, viralPotentialScore
-- banReasonHints[] — human-readable list of every detected restriction
+- banReasonHints[] — every detected restriction in plain English
+- recommendations[] — actionable advice based on the detected signals
 - author + stats + music + hashtags
 
 Quick start:
@@ -25,10 +25,14 @@ Quick start:
         "https://www.tiktok.com/@tiktok/video/7480279424202575159"
     )
     print(result["shadowbanned"], result["videoHealthScore"])
+    for rec in result.get("recommendations", []):
+        print(rec)
 
-    # Audit last 30 videos of an account
-    videos, summary = client.check_account("creator_handle", limit=30)
-    print(f"Shadowbanned: {summary['shadowbannedCount']}/{summary['totalChecked']}")
+    # Or paste a multi-line block of URLs
+    videos, summary = client.check_text('''
+        https://www.tiktok.com/@a/video/1
+        https://www.tiktok.com/@b/video/2
+    ''')
 
 See https://github.com/apivault-labs/tiktok-shadow-ban-checker-python for full docs.
 """
@@ -41,7 +45,7 @@ from .exceptions import (
     ActorTimeoutError,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
     "TikTokShadowBanClient",
     "TikTokShadowBanError",
