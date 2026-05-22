@@ -36,6 +36,16 @@ def main() -> None:
         hints = v.get("restrictionCount") or 0
         print(f"{author[:22]:<22} {banned:<8} {health:>6} {eng_s} {hints:>5}")
 
+    # Show top recommendation per video (verdict line is always first)
+    print(f"\n{'Top recommendation per video':-^60}")
+    for v in videos:
+        if not v.get("success"):
+            continue
+        author = "@" + ((v.get("author") or {}).get("uniqueId") or "?")
+        recs = v.get("recommendations") or []
+        if recs:
+            print(f"  {author[:20]:<22}  {recs[0]}")
+
     if summary:
         print(f"\n=== Batch summary ===")
         print(f"  total checked:       {summary['totalChecked']}")
