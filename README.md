@@ -462,3 +462,15 @@ This client is open source. The underlying Apify actor is a paid service ($0.01/
 ## Keywords
 
 `tiktok-shadow-ban` `tiktok-shadow-ban-checker` `tiktok-shadowban-api` `shadow-ban-detection` `tiktok-fyp-checker` `tiktok-search-visibility` `tiktok-suppression-detection` `tiktok-video-health` `tiktok-engagement-rate-api` `tiktok-viral-score` `creator-analytics` `creator-self-audit` `agency-tools` `brand-safety` `content-moderation-detection` `tiktok-without-api-key` `tiktok-research-api-alternative` `web-scraping` `apify` `apify-actor` `python-sdk`
+
+<!-- apivault-integrations:start -->
+## Hosted Actor and integrations
+
+- [Run TikTok Shadow Ban Checker — Bulk Video CSV API on Apify](https://apify.com/apivault_labs/tiktok-shadow-ban-checker).
+- [Current pricing and usage terms](https://apify.com/apivault_labs/tiktok-shadow-ban-checker/pricing).
+- [n8n community package: n8n-nodes-apivault-tiktok-shadowban](https://www.npmjs.com/package/n8n-nodes-apivault-tiktok-shadowban).
+- [n8n source and usage](https://github.com/apivault-labs/n8n-nodes-apivault-tiktok-shadowban).
+- [n8n source and usage](https://github.com/apivault-labs/apivault-labs/tree/main/community-nodes/n8n-nodes-apivault-tiktok-shadowban).
+
+An Apify account and API token are required. Hosted Actor/platform charges apply. npm publication is not n8n verification or confirmation of n8n Cloud availability.
+<!-- apivault-integrations:end -->
